@@ -69,15 +69,18 @@ else
 fi
 
 # --- Pfortner ---
+PFORTNER_REPO_URL="${PFORTNER_REPO_URL:-https://github.com/Hakkadaikon/Pfortner}"
+PFORTNER_REPO_REF="${PFORTNER_REPO_REF:-main}"
+
 if [ ! -d /opt/pfortner/repo/.git ]; then
-    echo "==> Cloning Pfortner..."
+    echo "==> Cloning Pfortner from ${PFORTNER_REPO_URL} (${PFORTNER_REPO_REF})..."
     sudo mkdir -p /opt/pfortner/{repo,etc,cache}
-    sudo git clone https://github.com/ikuradon/Pfortner /opt/pfortner/repo
+    sudo git clone --branch "${PFORTNER_REPO_REF}" "${PFORTNER_REPO_URL}" /opt/pfortner/repo
     echo "==> Caching Pfortner dependencies..."
     sudo DENO_DIR=/opt/pfortner/cache deno cache /opt/pfortner/repo/scripts/serve.ts 2>&1 | tail -3
     sudo chown -R chorus:chorus /opt/pfortner
 else
-    echo "    Pfortner already cloned, skipping"
+    echo "    Pfortner already cloned, skipping (use deploy.sh to update)"
 fi
 
 # --- cloudflared ---

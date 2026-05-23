@@ -10,7 +10,10 @@ server:
 
   connections:
     max: 200
-    max_per_ip: 200
+    # Cap a single IP at 20 concurrent connections so one bad client
+    # cannot exhaust the global pool. Tune up if legitimate sharing
+    # via CGNAT/cloudflared causes 429s.
+    max_per_ip: 20
 
 admin:
   enabled: true

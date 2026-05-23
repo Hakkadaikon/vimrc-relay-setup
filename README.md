@@ -3,8 +3,12 @@
 [Chorus](https://github.com/mikedilger/chorus) Nostr Relay のビルド・デプロイ環境です。
 
 GitHub Actions で `x86_64-unknown-linux-musl` 静的バイナリをビルドし、
-[Pfortner](https://github.com/ikuradon/Pfortner) による kind フィルタリングを経由して、
-Linux VPS + Cloudflare Tunnel でホストします。
+[Pförtner (Hakkadaikon fork)](https://github.com/Hakkadaikon/Pfortner) による
+kind フィルタリングを経由して、Linux VPS + Cloudflare Tunnel でホストします。
+fork では本家 `ikuradon/Pfortner` の接続スロットリーク
+([詳細](https://github.com/Hakkadaikon/Pfortner/commit/2dd4738)) を修正済み。
+
+`PFORTNER_REPO_URL` / `PFORTNER_REPO_REF` 環境変数で deploy 時の参照先を上書きできます。
 
 ## 構成
 

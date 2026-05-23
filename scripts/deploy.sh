@@ -5,7 +5,7 @@ set -euo pipefail
 # Usage: ./scripts/deploy.sh [--config-only]
 #
 # Options:
-#   --config-only   設定ファイルのみ転送 (バイナリはスキップ)
+#   --config-only   設定ファイルのみ転送 (バイナリと Pfortner ソース更新はスキップ)
 #
 # 環境変数 (すべて必須):
 #   VPS_HOST       VPS のホスト名
@@ -15,6 +15,12 @@ set -euo pipefail
 #   TUNNEL_ID      Cloudflare Tunnel ID
 #   ADMIN_DOMAIN   管理画面のドメイン名
 #   ADMIN_TOKEN    Pfortner 管理画面の認証トークン
+#
+# 環境変数 (オプション):
+#   PFORTNER_REPO_URL  Pfortner の git origin URL を差し替える
+#                      (default: https://github.com/Hakkadaikon/Pfortner)
+#   PFORTNER_REPO_REF  チェックアウトする ref / branch
+#                      (default: main)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -26,6 +32,9 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 : "${TUNNEL_ID:?TUNNEL_ID is required}"
 : "${ADMIN_DOMAIN:?ADMIN_DOMAIN is required}"
 : "${ADMIN_TOKEN:?ADMIN_TOKEN is required}"
+
+PFORTNER_REPO_URL="${PFORTNER_REPO_URL:-https://github.com/Hakkadaikon/Pfortner}"
+PFORTNER_REPO_REF="${PFORTNER_REPO_REF:-main}"
 
 SSH_CMD="ssh -i $SSH_KEY ${VPS_USER}@${VPS_HOST}"
 SCP_CMD="scp -i $SSH_KEY"
@@ -60,6 +69,38 @@ if [[ "$CONFIG_ONLY" == false ]]; then
     else
         echo "    (skipped: $CHORUS_BIN not found. Run 'gh run download' first)"
     fi
+fi
+
+# --- Pfortner source update ---
+if [[ "$CONFIG_ONLY" == false ]]; then
+    echo "==> Updating Pfortner source on VPS to ${PFORTNER_REPO_URL} (${PFORTNER_REPO_REF})..."
+    $SSH_CMD "PFORTNER_REPO_URL='${PFORTNER_REPO_URL}' PFORTNER_REPO_REF='${PFORTNER_REPO_REF}' bash -s" <<'REMOTE'
+set -euo pipefail
+REPO_DIR=/opt/pfortner/repo
+
+if [ ! -d "$REPO_DIR/.git" ]; then
+    echo "    pfortner repo not found at $REPO_DIR; run setup.sh first" >&2
+    exit 1
+fi
+
+# Switch remote URL if it does not already match (fork migration).
+CURRENT_URL=$(sudo -u chorus git -C "$REPO_DIR" remote get-url origin)
+if [ "$CURRENT_URL" != "$PFORTNER_REPO_URL" ]; then
+    echo "    updating origin: $CURRENT_URL -> $PFORTNER_REPO_URL"
+    sudo -u chorus git -C "$REPO_DIR" remote set-url origin "$PFORTNER_REPO_URL"
+fi
+
+sudo -u chorus git -C "$REPO_DIR" fetch --prune --tags origin
+sudo -u chorus git -C "$REPO_DIR" checkout "$PFORTNER_REPO_REF"
+# Fast-forward to the remote tip (works for branches; harmless for tags)
+sudo -u chorus git -C "$REPO_DIR" reset --hard "origin/${PFORTNER_REPO_REF}" 2>/dev/null \
+    || sudo -u chorus git -C "$REPO_DIR" reset --hard "$PFORTNER_REPO_REF"
+
+echo "    HEAD: $(sudo -u chorus git -C "$REPO_DIR" rev-parse --short HEAD) $(sudo -u chorus git -C "$REPO_DIR" log -1 --format='%s')"
+
+# Re-cache deps in case lock/import map changed
+sudo DENO_DIR=/opt/pfortner/cache deno cache "$REPO_DIR/scripts/serve.ts" 2>&1 | tail -3
+REMOTE
 fi
 
 # --- Config files ---
